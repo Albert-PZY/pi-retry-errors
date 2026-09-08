@@ -1,0 +1,10 @@
+{
+  "errors": [
+    "terminated",
+    "connection error",
+    "upstream service temporarily unavailable",
+    "upstream request failed",
+    "upstream response stream was interrupted",
+    "stream_read_error"
+  ]
+}

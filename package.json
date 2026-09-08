@@ -1,0 +1,32 @@
+{
+  "name": "pi-retry-errors",
+  "version": "1.0.0",
+  "description": "配置驱动的 Pi Coding Agent 异常自动重试扩展",
+  "keywords": ["pi-package", "pi-extension", "retry", "coding-agent"],
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Albert-PZY/pi-retry-errors.git"
+  },
+  "homepage": "https://github.com/Albert-PZY/pi-retry-errors#readme",
+  "bugs": {
+    "url": "https://github.com/Albert-PZY/pi-retry-errors/issues"
+  },
+  "files": [
+    "extensions",
+    "retry-errors.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
