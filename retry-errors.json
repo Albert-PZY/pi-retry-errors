@@ -6,6 +6,7 @@
     "upstream request failed",
     "upstream response stream was interrupted",
     "stream_read_error",
-    "Too many pending requests, please retry later"
+    "Too many pending requests, please retry later",
+    "Invalid prompt: your prompt was flagged as potentially violating our usage policy"
   ]
 }
