@@ -137,6 +137,7 @@ git push origin main v1.0.1
 ```
 
 标签必须与 `package.json` 版本一致。GitHub Actions 会检查包内容并自动发布到 npm。
+GitHub 仓库右侧的 Packages 区域只显示 GitHub Packages，不会自动显示 npmjs.com 包。发布工作流会同步一个 GitHub Packages 镜像；首次发布后需在 GitHub 包设置中将其改为 `Public`，后续版本会自动同步。
 
 ### License
 
