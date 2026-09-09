@@ -43,3 +43,56 @@ jobs:
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github-packages:
+    name: 发布到 GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+
+      - name: 配置 npm
+        run: npm install --global npm@11
+
+      - name: 创建 GitHub Packages 包清单
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const packagePath = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+          pkg.name = "@albert-pzy/pi-retry-errors";
+          pkg.repository = {
+            type: "git",
+            url: "https://github.com/Albert-PZY/pi-retry-errors.git",
+          };
+          pkg.publishConfig = {
+            access: "public",
+            registry: "https://npm.pkg.github.com",
+          };
+          fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+          NODE
+
+      - name: 校验标签与包版本
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          expected_tag="v${package_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "标签 ${GITHUB_REF_NAME} 与 package.json 版本 ${package_version} 不一致" >&2
+            exit 1
+          fi
+
+      - name: 发布到 GitHub Packages
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,9 @@
 
 一个配置驱动的 Pi Coding Agent 全局异常自动重试扩展。
 
+[![npm version](https://img.shields.io/npm/v/pi-retry-errors?logo=npm)](https://www.npmjs.com/package/pi-retry-errors) [![npm downloads](https://img.shields.io/npm/dm/pi-retry-errors?logo=npm)](https://www.npmjs.com/package/pi-retry-errors)
+[![发布工作流](https://github.com/Albert-PZY/pi-retry-errors/actions/workflows/publish.yml/badge.svg)](https://github.com/Albert-PZY/pi-retry-errors/actions/workflows/publish.yml)
+
 扩展复用 Pi 原生的重试预算、指数退避、取消机制和生命周期事件，仅补充配置文件中的异常文本识别。异常文本与扩展源码完全解耦。
 
 ### 功能
@@ -26,6 +29,11 @@ pi install npm:pi-retry-errors
 ```bash
 pi install git:github.com/Albert-PZY/pi-retry-errors
 ```
+
+版本页面：
+
+- npm：<https://www.npmjs.com/package/pi-retry-errors>
+- GitHub Packages 镜像：<https://github.com/users/Albert-PZY/packages/npm/package/pi-retry-errors>
 
 安装完成后重新启动 Pi，或在当前 TUI 会话中执行：
 
