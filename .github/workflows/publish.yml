@@ -1,0 +1,45 @@
+name: 发布到 npm
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: 校验并发布
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: 配置 npm
+        run: npm install --global npm@11
+
+      - name: 校验标签与包版本
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          expected_tag="v${package_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "标签 ${GITHUB_REF_NAME} 与 package.json 版本 ${package_version} 不一致" >&2
+            exit 1
+          fi
+
+      - name: 检查发布内容
+        run: npm pack --dry-run
+
+      - name: 发布到 npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

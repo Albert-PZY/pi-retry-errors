@@ -15,6 +15,14 @@
 
 ### 安装
 
+从 npm 安装：
+
+```bash
+pi install npm:pi-retry-errors
+```
+
+或从 GitHub 安装：
+
 ```bash
 pi install git:github.com/Albert-PZY/pi-retry-errors
 ```
@@ -110,6 +118,17 @@ pi install git:github.com/Albert-PZY/pi-retry-errors
 ### 兼容性
 
 当前实现针对 `@earendil-works/pi-coding-agent` `0.85.1` 验证。扩展会检查 Pi 的原生重试判定函数；若未来版本改变内部接口，会显示兼容性错误，而不是静默失效。
+
+### 发布
+
+先更新 `package.json` 中的版本号并提交，再推送同版本标签：
+
+```bash
+git tag v1.0.1
+git push origin main v1.0.1
+```
+
+标签必须与 `package.json` 版本一致。GitHub Actions 会检查包内容并自动发布到 npm。
 
 ### License
 

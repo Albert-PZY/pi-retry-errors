@@ -13,6 +13,10 @@
   "bugs": {
     "url": "https://github.com/Albert-PZY/pi-retry-errors/issues"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "files": [
     "extensions",
     "retry-errors.json",
