@@ -1,17 +1,33 @@
-name: 发布到 npm
+name: 发布包
 
 on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要同步到 GitHub Packages 的现有 SemVer 版本，例如 1.0.0"
+        required: true
+        type: string
+      confirm:
+        description: "已确认要同步该版本"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: publish-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  publish:
-    name: 校验并发布
+  publish-npm:
+    if: ${{ github.event_name == 'push' }}
+    name: 发布到 npm
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
@@ -27,6 +43,7 @@ jobs:
         run: npm install --global npm@11
 
       - name: 校验标签与包版本
+        id: version
         shell: bash
         run: |
           package_version="$(node -p "require('./package.json').version")"
@@ -35,64 +52,140 @@ jobs:
             echo "标签 ${GITHUB_REF_NAME} 与 package.json 版本 ${package_version} 不一致" >&2
             exit 1
           fi
+          echo "value=${package_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: 检查 npm 版本
+        id: npm-version
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          set +e
+          output="$(npm view "pi-retry-errors@${PACKAGE_VERSION}" version --registry https://registry.npmjs.org 2>&1)"
+          status=$?
+          set -e
+          if [[ "${status}" -eq 0 ]]; then
+            echo "published=true" >> "${GITHUB_OUTPUT}"
+          elif printf '%s' "${output}" | grep -q 'E404'; then
+            echo "published=false" >> "${GITHUB_OUTPUT}"
+          else
+            printf '%s\n' "${output}" >&2
+            exit "${status}"
+          fi
 
       - name: 检查发布内容
+        if: ${{ steps.npm-version.outputs.published != 'true' }}
         run: npm pack --dry-run
 
       - name: 发布到 npm
-        run: npm publish --access public --provenance
+        if: ${{ steps.npm-version.outputs.published != 'true' }}
+        run: npm publish --access public --provenance --registry https://registry.npmjs.org
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-github-packages:
+    if: ${{ github.event_name == 'push' || inputs.confirm == true }}
     name: 发布到 GitHub Packages
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - name: 检出代码
+      - name: 检出发布版本
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref }}
 
       - name: 配置 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://npm.pkg.github.com
 
       - name: 配置 npm
         run: npm install --global npm@11
 
-      - name: 创建 GitHub Packages 包清单
-        shell: bash
-        run: |
-          node <<'NODE'
-          const fs = require("node:fs");
-          const packagePath = "package.json";
-          const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
-          pkg.name = "@albert-pzy/pi-retry-errors";
-          pkg.repository = {
-            type: "git",
-            url: "https://github.com/Albert-PZY/pi-retry-errors.git",
-          };
-          pkg.publishConfig = {
-            access: "public",
-            registry: "https://npm.pkg.github.com",
-          };
-          fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
-          NODE
-
-      - name: 校验标签与包版本
+      - name: 校验发布版本
+        id: version
+        env:
+          REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
         shell: bash
         run: |
           package_version="$(node -p "require('./package.json').version")"
-          expected_tag="v${package_version}"
-          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
-            echo "标签 ${GITHUB_REF_NAME} 与 package.json 版本 ${package_version} 不一致" >&2
+          requested_version="${REQUESTED_VERSION#v}"
+          if [[ "${requested_version}" != "${package_version}" ]]; then
+            echo "请求版本 ${requested_version} 与 package.json 版本 ${package_version} 不一致" >&2
             exit 1
           fi
+          echo "value=${package_version}" >> "${GITHUB_OUTPUT}"
 
-      - name: 发布到 GitHub Packages
-        run: npm publish --access public
+      - name: 配置 GitHub Packages 认证
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_NPMRC: ${{ runner.temp }}/github-packages.npmrc
+        shell: bash
+        run: |
+          umask 077
+          printf '%s\n' \
+            '@albert-pzy:registry=https://npm.pkg.github.com' \
+            "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" \
+            > "${GITHUB_PACKAGES_NPMRC}"
+
+      - name: 检查 GitHub Packages 版本
+        id: github-package-version
+        env:
+          GITHUB_PACKAGES_NPMRC: ${{ runner.temp }}/github-packages.npmrc
+          PACKAGE_VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          set +e
+          output="$(NPM_CONFIG_USERCONFIG="${GITHUB_PACKAGES_NPMRC}" npm view "@albert-pzy/pi-retry-errors@${PACKAGE_VERSION}" version --registry https://npm.pkg.github.com 2>&1)"
+          status=$?
+          set -e
+          if [[ "${status}" -eq 0 ]]; then
+            echo "published=true" >> "${GITHUB_OUTPUT}"
+          elif printf '%s' "${output}" | grep -Eq 'E404|404|Package not found'; then
+            echo "published=false" >> "${GITHUB_OUTPUT}"
+          else
+            printf '%s\n' "${output}" >&2
+            exit "${status}"
+          fi
+
+      - name: 准备 GitHub Packages 镜像
+        if: ${{ steps.github-package-version.outputs.published != 'true' }}
+        id: github-package
+        env:
+          MIRROR_ROOT: ${{ runner.temp }}/github-package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "${MIRROR_ROOT}"
+          mkdir -p "${MIRROR_ROOT}"
+          pack_json="$(npm pack --ignore-scripts --pack-destination "${RUNNER_TEMP}" --json)"
+          tarball="$(node -e 'const data = JSON.parse(process.argv[1]); console.log(data[0].filename);' "${pack_json}")"
+          tar -xzf "${RUNNER_TEMP}/${tarball}" -C "${MIRROR_ROOT}"
+          export MIRROR_PACKAGE="${MIRROR_ROOT}/package"
+          node <<'NODE'
+          const { readFileSync, writeFileSync } = require("node:fs");
+          const { join } = require("node:path");
+
+          const manifestPath = join(process.env.MIRROR_PACKAGE, "package.json");
+          const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+          manifest.name = "@albert-pzy/pi-retry-errors";
+          manifest.repository = {
+            type: "git",
+            url: "git+https://github.com/Albert-PZY/pi-retry-errors.git",
+          };
+          manifest.publishConfig = {
+            access: "public",
+            registry: "https://npm.pkg.github.com",
+          };
+          writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+          echo "path=${MIRROR_PACKAGE}" >> "${GITHUB_OUTPUT}"
+
+      - name: 发布 GitHub Packages 镜像
+        if: ${{ steps.github-package-version.outputs.published != 'true' }}
+        env:
+          GITHUB_PACKAGES_NPMRC: ${{ runner.temp }}/github-packages.npmrc
+          MIRROR_PACKAGE: ${{ steps.github-package.outputs.path }}
+        run: NPM_CONFIG_USERCONFIG="${GITHUB_PACKAGES_NPMRC}" npm publish "${MIRROR_PACKAGE}" --access public --registry https://npm.pkg.github.com
